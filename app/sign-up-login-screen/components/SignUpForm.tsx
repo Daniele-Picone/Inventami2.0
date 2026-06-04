@@ -273,9 +273,9 @@ export default function SignUpForm() {
             label="Codice azienda"
             placeholder="WC-A1B2C3D4"
             error={errors.companyKey?.message}
-            {...register('companyKey', {
-              required: role !== 'MANAGER' ? 'Codice azienda obbligatorio' : false,
-            })}
+          {...register('companyKey', {
+  required: 'Codice azienda obbligatorio',
+})}
           />
         )}
 
