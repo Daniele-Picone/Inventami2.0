@@ -1,0 +1,1 @@
+import AppLayout from '@/components/AppLayout';import InventoryDashboard from '@/app/wine-inventory-management/components/InventoryDashboard';export default function MagazzinoPage(){return <AppLayout><InventoryDashboard/></AppLayout>}

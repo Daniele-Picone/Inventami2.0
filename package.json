@@ -1,0 +1,39 @@
+{
+  "name": "winecellar",
+  "version": "1.0.0",
+  "private": true,
+ 
+   "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "@next/font": "latest",
+    "@prisma/client": "^7.8.0",
+    "@tailwindcss/postcss": "^4.3.0",
+    "bcryptjs": "^3.0.3",
+    "lucide-react": "^1.17.0",
+    "next": "latest",
+    "prisma": "^7.8.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-hook-form": "^7.77.0",
+    "recharts": "^3.8.1",
+    "resend": "^6.12.4",
+    "sonner": "^2.0.7",
+    "xlsx": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "autoprefixer": "^10.5.0",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.17",
+    "typescript": "latest"
+  }
+}

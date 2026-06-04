@@ -1,0 +1,1 @@
+'use client';import AppLayout from '@/components/AppLayout';import WineReportsScreen from './components/WineReportsScreen';export default function ReportsPage(){return <AppLayout><WineReportsScreen/></AppLayout>}
