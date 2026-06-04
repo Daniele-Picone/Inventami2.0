@@ -4,13 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-enum UserRole {
-  MANAGER
-  STAFF
-  SOMMELIER
 }
 
 model Company {
@@ -19,19 +12,80 @@ model Company {
   inviteKey String   @unique
   createdAt DateTime @default(now())
 
-  users User[]
+  users       User[]
+  restaurants Restaurant[]
+  invites     Invite[]
 }
 
 model User {
-  id        String   @id @default(cuid())
-  nome      String
-  cognome   String
-  email     String   @unique
-  password  String
-  role      UserRole
-  verified  Boolean  @default(false)
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
+  id       String   @id @default(cuid())
+  nome     String
+  cognome  String
+  email    String   @unique
+  password String
+  role     UserRole
+  verified Boolean  @default(false)
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Restaurant {
+  id      String  @id @default(cuid())
+  name    String
+  type    String?
+  city    String?
+  address String?
+  logo    String?
+  color   String?
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  wines Wine[]
+
+  createdAt DateTime @default(now())
+}
+
+model Wine {
+  id           String       @id @default(cuid())
+  name         String
+  producer     String
+  region       String
+  denomination String
+  vintage      Int
+  category     WineCategory
+  stock        Int
+  glassPrice   Float
+  bottlePrice  Float
+  alcohol      Float
+  format       String
+  notes        String?
+  pairings     String?
+  status       WineStatus
+  inMenu       Boolean      @default(true)
+
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  movements InventoryMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InventoryMovement {
+  id       String       @id @default(cuid())
+  type     MovementType
+  quantity Int
+  note     String?
+
+  wineId String
+  wine   Wine   @relation(fields: [wineId], references: [id])
+
+  userId    String?
   createdAt DateTime @default(now())
 }
 
@@ -41,4 +95,45 @@ model VerificationCode {
   code      String
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model Invite {
+  id        String   @id @default(cuid())
+  email     String?
+  token     String   @unique
+  role      UserRole
+  used      Boolean  @default(false)
+  expiresAt DateTime
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+enum UserRole {
+  MANAGER
+  SOMMELIER
+  STAFF
+}
+
+enum WineCategory {
+  ROSSO
+  BIANCO
+  ROSE
+  SPUMANTE
+  DOLCE
+}
+
+enum WineStatus {
+  DISPONIBILE
+  ESAURIMENTO
+  ESAURITO
+  ARCHIVIATO
+}
+
+enum MovementType {
+  CARICO
+  SCARICO
+  RETTIFICA
 }
