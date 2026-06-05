@@ -61,6 +61,21 @@ function mapRestaurant(restaurant: ApiRestaurant): Restaurant {
   };
 }
 
+function getLoggedUser(): LoggedUser | null {
+  if (typeof window === 'undefined') return null;
+
+  const savedUser = localStorage.getItem('winecellar_user');
+
+  if (!savedUser) return null;
+
+  try {
+    return JSON.parse(savedUser);
+  } catch {
+    localStorage.removeItem('winecellar_user');
+    return null;
+  }
+}
+
 export function RestaurantProvider({
   children,
 }: {
@@ -71,19 +86,9 @@ export function RestaurantProvider({
     useState<Restaurant | null>(null);
   const [loadingRestaurants, setLoadingRestaurants] = useState(true);
 
-  const getLoggedUser = (): LoggedUser | null => {
-    if (typeof window === 'undefined') return null;
-
-    const savedUser = localStorage.getItem('winecellar_user');
-
-    if (!savedUser) return null;
-
-    try {
-      return JSON.parse(savedUser);
-    } catch {
-      localStorage.removeItem('winecellar_user');
-      return null;
-    }
+  const setCurrentRestaurant = (restaurant: Restaurant) => {
+    setCurrentRestaurantState(restaurant);
+    localStorage.setItem('winecellar_current_restaurant', restaurant.id);
   };
 
   const reloadRestaurants = async () => {
@@ -109,7 +114,32 @@ export function RestaurantProvider({
         throw new Error(json.error || 'Errore caricamento ristoranti');
       }
 
-      const mapped = json.restaurants.map(mapRestaurant);
+      let mapped: Restaurant[] = json.restaurants.map(mapRestaurant);
+
+      if (mapped.length === 0) {
+        const createResponse = await fetch('/api/restaurants', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            companyId: loggedUser.companyId,
+            name: loggedUser.companyName || 'Il mio locale',
+            type: 'Ristorante',
+            city: '',
+            address: '',
+            color: '#7B2D3E',
+          }),
+        });
+
+        const createJson = await createResponse.json();
+
+        if (!createResponse.ok) {
+          throw new Error(createJson.error || 'Errore creazione locale');
+        }
+
+        mapped = [mapRestaurant(createJson.restaurant)];
+      }
 
       setRestaurants(mapped);
 
@@ -117,12 +147,19 @@ export function RestaurantProvider({
         'winecellar_current_restaurant',
       );
 
-      const savedRestaurant =
-        mapped.find((restaurant: Restaurant) => restaurant.id === savedRestaurantId) ||
+      const selectedRestaurant =
+        mapped.find((restaurant) => restaurant.id === savedRestaurantId) ||
         mapped[0] ||
         null;
 
-      setCurrentRestaurantState(savedRestaurant);
+      setCurrentRestaurantState(selectedRestaurant);
+
+      if (selectedRestaurant) {
+        localStorage.setItem(
+          'winecellar_current_restaurant',
+          selectedRestaurant.id,
+        );
+      }
     } catch (error) {
       console.error(error);
       setRestaurants([]);
@@ -135,11 +172,6 @@ export function RestaurantProvider({
   useEffect(() => {
     reloadRestaurants();
   }, []);
-
-  const setCurrentRestaurant = (restaurant: Restaurant) => {
-    setCurrentRestaurantState(restaurant);
-    localStorage.setItem('winecellar_current_restaurant', restaurant.id);
-  };
 
   const value = useMemo(
     () => ({

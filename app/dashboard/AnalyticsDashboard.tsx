@@ -148,39 +148,58 @@ export default function AnalyticsDashboard() {
     }
   }, []);
 
-  const loadWines = async () => {
-    if (!companyId) return;
+ const loadWines = async () => {
+  if (!companyId) return;
+
+  if (!currentRestaurant?.id) {
+    setWines([]);
+    setLoading(false);
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setError('');
+
+    const params = new URLSearchParams({
+      companyId,
+      restaurantId: currentRestaurant.id,
+    });
+
+    const response = await fetch(`/api/wines?${params.toString()}`);
+
+    const text = await response.text();
+
+    let json: {
+      wines?: ApiWine[];
+      error?: string;
+    };
 
     try {
-      setLoading(true);
-      setError('');
+      json = JSON.parse(text);
+    } catch {
+      console.error('RISPOSTA NON JSON DA /api/wines:', text);
 
-      const params = new URLSearchParams({
-        companyId,
-      });
-
-      if (currentRestaurant?.id) {
-        params.set('restaurantId', currentRestaurant.id);
-      }
-
-      const response = await fetch(`/api/wines?${params.toString()}`);
-      const json = await response.json();
-
-      if (!response.ok) {
-        throw new Error(json.error || 'Errore caricamento vini');
-      }
-
-      setWines(json.wines);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Errore durante il caricamento vini',
+      throw new Error(
+        'La API /api/wines non sta restituendo JSON. Controlla che app/api/wines/route.ts esista e sia deployata.',
       );
-    } finally {
-      setLoading(false);
     }
-  };
+
+    if (!response.ok) {
+      throw new Error(json.error || 'Errore caricamento vini');
+    }
+
+    setWines(json.wines || []);
+  } catch (err) {
+    setError(
+      err instanceof Error
+        ? err.message
+        : 'Errore durante il caricamento vini',
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     loadWines();
