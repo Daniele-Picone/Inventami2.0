@@ -3,8 +3,6 @@ import { Resend } from 'resend';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -15,6 +13,21 @@ function generateCompanyKey() {
 
 export async function POST(req: Request) {
   try {
+    const resendApiKey = process.env.RESEND_API_KEY;
+
+    if (!resendApiKey) {
+      return Response.json(
+        { error: 'RESEND_API_KEY non configurata sul server' },
+        { status: 500 },
+      );
+    }
+
+    const resend = new Resend(resendApiKey);
+
+    // Per ora fisso, così siamo sicuri che il campo "from" venga inviato.
+    // Quando verifichi un dominio su Resend, cambia questa riga.
+    const resendFromEmail = 'WineCellar <onboarding@resend.dev>';
+
     const body = await req.json();
 
     const {
@@ -114,8 +127,8 @@ export async function POST(req: Request) {
       },
     });
 
-    const { error } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL!,
+    const { data, error } = await resend.emails.send({
+      from: resendFromEmail,
       to: email,
       subject: 'Codice di conferma WineCellar',
       html: `
@@ -129,9 +142,15 @@ export async function POST(req: Request) {
       `,
     });
 
+    console.log('RESEND_DATA:', data);
+    console.log('RESEND_ERROR:', error);
+
     if (error) {
       return Response.json(
-        { error: error.message },
+        {
+          error: error.message || 'Errore invio email',
+          details: error,
+        },
         { status: 500 },
       );
     }
