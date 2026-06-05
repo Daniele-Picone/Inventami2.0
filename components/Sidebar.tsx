@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import AppLogo from '@/components/ui/AppLogo';
 import {
   BookOpen,
@@ -17,6 +17,8 @@ import {
   Building2,
   FileSpreadsheet,
   X,
+  Settings,
+  Landmark,
 } from 'lucide-react';
 import { useRestaurant } from '@/context/RestaurantContext';
 
@@ -26,6 +28,7 @@ const NAV = [
   ['/digital-wine-menu', BookOpen, 'Menù Ospiti'],
   ['/reports', FileSpreadsheet, 'Report'],
   ['/users', Users, 'Utenti'],
+  ['/settings', Settings, 'Settings'],
 ] as const;
 
 type LoggedUser = {
@@ -90,6 +93,38 @@ export default function Sidebar() {
     }
   }, [router]);
 
+  const visibleRestaurants = useMemo(() => {
+    const companyName = user?.companyName?.trim().toLowerCase();
+
+    return restaurants.filter((restaurant) => {
+      if (!companyName) return true;
+
+      const restaurantName = restaurant.nome.trim().toLowerCase();
+
+      return restaurantName !== companyName;
+    });
+  }, [restaurants, user?.companyName]);
+
+  const selectedRestaurant = useMemo(() => {
+    if (
+      currentRestaurant &&
+      visibleRestaurants.some((restaurant) => restaurant.id === currentRestaurant.id)
+    ) {
+      return currentRestaurant;
+    }
+
+    return visibleRestaurants[0] || null;
+  }, [currentRestaurant, visibleRestaurants]);
+
+  useEffect(() => {
+    if (
+      selectedRestaurant &&
+      currentRestaurant?.id !== selectedRestaurant.id
+    ) {
+      setCurrentRestaurant(selectedRestaurant);
+    }
+  }, [selectedRestaurant, currentRestaurant?.id, setCurrentRestaurant]);
+
   const handleLogout = () => {
     localStorage.removeItem('winecellar_user');
     localStorage.removeItem('winecellar_current_restaurant');
@@ -136,7 +171,7 @@ export default function Sidebar() {
     <>
       <aside
         className={`relative flex flex-col bg-card border-r border-border sidebar-transition shrink-0 ${
-          collapsed ? 'w-16' : 'w-60'
+          collapsed ? 'w-16' : 'w-64'
         }`}
       >
         <div
@@ -145,34 +180,78 @@ export default function Sidebar() {
           }`}
         >
           <AppLogo size={32} />
+
           {!collapsed && (
-            <span className="font-bold text-base text-foreground tracking-tight">
-              WineCellar
-            </span>
+            <div className="min-w-0">
+              <span className="font-bold text-base text-foreground tracking-tight block">
+                WineCellar
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Gestionale cantina
+              </span>
+            </div>
           )}
         </div>
 
-        {!collapsed && currentRestaurant && (
+        {!collapsed && (
+          <div className="px-3 py-3 border-b border-border">
+            <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-primary/5 border border-primary/15">
+              <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                <Landmark size={16} className="text-primary" />
+              </div>
+
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
+                  Società
+                </div>
+                <div className="text-sm font-bold text-foreground truncate">
+                  {user?.companyName || 'Azienda'}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!collapsed && (
           <div className="px-3 py-3 border-b border-border relative">
             <button
               onClick={() => setShow((value) => !value)}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-secondary hover:bg-muted transition-colors text-left"
             >
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
-                style={{ backgroundColor: currentRestaurant.colore }}
-              >
-                {currentRestaurant.logo}
-              </div>
+              {selectedRestaurant ? (
+                <>
+                  <div
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
+                    style={{ backgroundColor: selectedRestaurant.colore }}
+                  >
+                    {selectedRestaurant.logo}
+                  </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-foreground truncate">
-                  {currentRestaurant.nome}
-                </div>
-                <div className="text-xs text-muted-foreground truncate">
-                  {currentRestaurant.citta || currentRestaurant.tipo}
-                </div>
-              </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-foreground truncate">
+                      {selectedRestaurant.nome}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {selectedRestaurant.citta || selectedRestaurant.tipo}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-muted text-muted-foreground shrink-0">
+                    <Building2 size={14} />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-foreground truncate">
+                      Nessun locale
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      Aggiungi un ristorante
+                    </div>
+                  </div>
+                </>
+              )}
 
               <ChevronDown size={14} />
             </button>
@@ -181,17 +260,17 @@ export default function Sidebar() {
               <div className="absolute left-3 right-3 top-full mt-1 bg-card border border-border rounded-xl shadow-lg z-50 overflow-hidden">
                 <div className="px-3 py-2 border-b border-border">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    I tuoi locali
+                    Ristoranti
                   </span>
                 </div>
 
-                {restaurants.length === 0 && (
+                {visibleRestaurants.length === 0 && (
                   <div className="px-3 py-3 text-xs text-muted-foreground">
-                    Nessun locale trovato
+                    Nessun ristorante creato
                   </div>
                 )}
 
-                {restaurants.map((restaurant) => (
+                {visibleRestaurants.map((restaurant) => (
                   <button
                     key={restaurant.id}
                     onClick={() => {
@@ -216,8 +295,8 @@ export default function Sidebar() {
                       </div>
                     </div>
 
-                    {currentRestaurant &&
-                      restaurant.id === currentRestaurant.id && (
+                    {selectedRestaurant &&
+                      restaurant.id === selectedRestaurant.id && (
                         <Check size={14} className="text-primary" />
                       )}
                   </button>
@@ -232,7 +311,7 @@ export default function Sidebar() {
                     className="w-full flex items-center gap-2 text-xs text-primary font-semibold py-1"
                   >
                     <Building2 size={13} />
-                    Aggiungi locale
+                    Aggiungi ristorante
                   </button>
                 </div>
               </div>
@@ -240,13 +319,10 @@ export default function Sidebar() {
           </div>
         )}
 
-        {collapsed && currentRestaurant && (
+        {collapsed && (
           <div className="px-2 py-3 border-b border-border flex justify-center">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold"
-              style={{ backgroundColor: currentRestaurant.colore }}
-            >
-              {currentRestaurant.logo}
+            <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
+              <Landmark size={15} className="text-primary" />
             </div>
           </div>
         )}
@@ -333,7 +409,7 @@ export default function Sidebar() {
                   Aggiungi ristorante
                 </h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Crea un nuovo locale collegato alla tua azienda.
+                  Crea un nuovo locale collegato alla società.
                 </p>
               </div>
 
@@ -354,7 +430,7 @@ export default function Sidebar() {
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-semibold text-foreground">
-                Nome locale
+                Nome ristorante
               </label>
               <input
                 value={restaurantName}
@@ -403,7 +479,7 @@ export default function Sidebar() {
                 disabled={creatingRestaurant}
                 className="px-5 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-50"
               >
-                {creatingRestaurant ? 'Creazione...' : 'Crea locale'}
+                {creatingRestaurant ? 'Creazione...' : 'Crea ristorante'}
               </button>
             </div>
           </form>

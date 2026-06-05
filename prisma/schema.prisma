@@ -5,11 +5,16 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-
+enum Plan {
+  FREE
+  PRO
+  PLUS
+}
 model Company {
   id        String   @id @default(cuid())
   name      String
   inviteKey String   @unique
+  plan      Plan     @default(FREE)
   createdAt DateTime @default(now())
 
   users       User[]
