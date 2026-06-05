@@ -160,37 +160,59 @@ export default function InventoryDashboard() {
     }
   }, []);
 
-  const loadWines = async () => {
-    if (!companyId) return;
+const loadWines = async () => {
+  if (!companyId) return;
 
-    try {
-      setLoading(true);
-      setError('');
+  if (!currentRestaurant?.id) {
+    setWines([]);
+    setLoading(false);
+    return;
+  }
 
-      const params = new URLSearchParams({ companyId });
+  try {
+    setLoading(true);
+    setError('');
 
-      if (currentRestaurant?.id) {
-        params.set('restaurantId', currentRestaurant.id);
+    const params = new URLSearchParams({
+      companyId,
+      restaurantId: currentRestaurant.id,
+    });
+
+    const response = await fetch(`/api/wines?${params.toString()}`);
+
+    const text = await response.text();
+
+    let json: {
+      wines?: ApiWine[];
+      error?: string;
+    } = {};
+
+    if (text) {
+      try {
+        json = JSON.parse(text);
+      } catch {
+        console.error('RISPOSTA NON JSON DA GET /api/wines:', text);
+        throw new Error(
+          'La API /api/wines non sta restituendo JSON valido.',
+        );
       }
-
-      const response = await fetch(`/api/wines?${params.toString()}`);
-      const json = await response.json();
-
-      if (!response.ok) {
-        throw new Error(json.error || 'Errore caricamento vini');
-      }
-
-      setWines(json.wines);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Errore durante il caricamento vini',
-      );
-    } finally {
-      setLoading(false);
     }
-  };
+
+    if (!response.ok) {
+      throw new Error(json.error || `Errore API /api/wines: ${response.status}`);
+    }
+
+    setWines(json.wines || []);
+  } catch (err) {
+    setError(
+      err instanceof Error
+        ? err.message
+        : 'Errore durante il caricamento vini',
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     loadWines();
@@ -222,50 +244,71 @@ export default function InventoryDashboard() {
     setShowForm(true);
   };
 
-  const saveWine = async (event: React.FormEvent) => {
-    event.preventDefault();
+ const saveWine = async (event: React.FormEvent) => {
+  event.preventDefault();
 
-    if (!currentRestaurant?.id) {
-      setError('Nessun locale selezionato');
-      return;
-    }
+  if (!currentRestaurant?.id) {
+    setError('Nessun locale selezionato');
+    return;
+  }
 
-    try {
-      setSaving(true);
-      setError('');
+  try {
+    setSaving(true);
+    setError('');
 
-      const payload = {
-        ...form,
-        restaurantId: currentRestaurant.id,
-      };
+    const payload = {
+      ...form,
+      restaurantId: currentRestaurant.id,
+    };
 
-      const response = await fetch('/api/wines', {
-        method: form.id ? 'PATCH' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+    const response = await fetch('/api/wines', {
+      method: form.id ? 'PATCH' : 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
-      const json = await response.json();
+    const text = await response.text();
 
-      if (!response.ok) {
-        throw new Error(json.error || 'Errore salvataggio vino');
+    let json: {
+      wine?: ApiWine;
+      error?: string;
+      details?: string;
+    } = {};
+
+    if (text) {
+      try {
+        json = JSON.parse(text);
+      } catch {
+        console.error('RISPOSTA NON JSON DA POST/PATCH /api/wines:', text);
+        throw new Error(
+          'La API /api/wines non ha restituito JSON valido. Controlla i log Vercel.',
+        );
       }
-
-      setShowForm(false);
-      setForm(emptyForm);
-      await loadWines();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Errore durante il salvataggio vino',
-      );
-    } finally {
-      setSaving(false);
     }
-  };
+
+    if (!response.ok) {
+      throw new Error(
+        json.details ||
+          json.error ||
+          `Errore API /api/wines: ${response.status}`,
+      );
+    }
+
+    setShowForm(false);
+    setForm(emptyForm);
+    await loadWines();
+  } catch (err) {
+    setError(
+      err instanceof Error
+        ? err.message
+        : 'Errore durante il salvataggio vino',
+    );
+  } finally {
+    setSaving(false);
+  }
+};
 
   const deleteWine = async (id: string) => {
     const confirmed = window.confirm('Vuoi eliminare questo vino?');
