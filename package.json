@@ -2,8 +2,7 @@
   "name": "winecellar",
   "version": "1.0.0",
   "private": true,
- 
-   "scripts": {
+  "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start"
@@ -11,11 +10,13 @@
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "@next/font": "latest",
+    "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@tailwindcss/postcss": "^4.3.0",
     "bcryptjs": "^3.0.3",
     "lucide-react": "^1.17.0",
     "next": "latest",
+    "pg": "^8.21.0",
     "prisma": "^7.8.0",
     "react": "latest",
     "react-dom": "latest",
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@types/node": "latest",
+    "@types/pg": "^8.20.0",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "autoprefixer": "^10.5.0",
