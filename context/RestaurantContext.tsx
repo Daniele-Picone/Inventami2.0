@@ -39,12 +39,21 @@ type ApiRestaurant = {
   color?: string | null;
 };
 
+type CreateRestaurantInput = {
+  name: string;
+  type?: string;
+  city?: string;
+  address?: string;
+  color?: string;
+};
+
 type RestaurantContextValue = {
   restaurants: Restaurant[];
   currentRestaurant: Restaurant | null;
   setCurrentRestaurant: (restaurant: Restaurant) => void;
   loadingRestaurants: boolean;
   reloadRestaurants: () => Promise<void>;
+  createRestaurant: (input: CreateRestaurantInput) => Promise<Restaurant>;
 };
 
 const RestaurantContext = createContext<RestaurantContextValue | null>(null);
@@ -91,6 +100,44 @@ export function RestaurantProvider({
     localStorage.setItem('winecellar_current_restaurant', restaurant.id);
   };
 
+  const createRestaurant = async (
+    input: CreateRestaurantInput,
+  ): Promise<Restaurant> => {
+    const loggedUser = getLoggedUser();
+
+    if (!loggedUser?.companyId) {
+      throw new Error('Sessione non valida. Effettua di nuovo il login.');
+    }
+
+    const response = await fetch('/api/restaurants', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        companyId: loggedUser.companyId,
+        name: input.name,
+        type: input.type || 'Ristorante',
+        city: input.city || '',
+        address: input.address || '',
+        color: input.color || '#7B2D3E',
+      }),
+    });
+
+    const json = await response.json();
+
+    if (!response.ok) {
+      throw new Error(json.error || 'Errore creazione ristorante');
+    }
+
+    const created = mapRestaurant(json.restaurant);
+
+    setRestaurants((prev) => [...prev, created]);
+    setCurrentRestaurant(created);
+
+    return created;
+  };
+
   const reloadRestaurants = async () => {
     const loggedUser = getLoggedUser();
 
@@ -117,28 +164,13 @@ export function RestaurantProvider({
       let mapped: Restaurant[] = json.restaurants.map(mapRestaurant);
 
       if (mapped.length === 0) {
-        const createResponse = await fetch('/api/restaurants', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            companyId: loggedUser.companyId,
-            name: loggedUser.companyName || 'Il mio locale',
-            type: 'Ristorante',
-            city: '',
-            address: '',
-            color: '#7B2D3E',
-          }),
+        const created = await createRestaurant({
+          name: loggedUser.companyName || 'Il mio locale',
+          type: 'Ristorante',
+          color: '#7B2D3E',
         });
 
-        const createJson = await createResponse.json();
-
-        if (!createResponse.ok) {
-          throw new Error(createJson.error || 'Errore creazione locale');
-        }
-
-        mapped = [mapRestaurant(createJson.restaurant)];
+        mapped = [created];
       }
 
       setRestaurants(mapped);
@@ -171,6 +203,7 @@ export function RestaurantProvider({
 
   useEffect(() => {
     reloadRestaurants();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const value = useMemo(
@@ -180,6 +213,7 @@ export function RestaurantProvider({
       setCurrentRestaurant,
       loadingRestaurants,
       reloadRestaurants,
+      createRestaurant,
     }),
     [restaurants, currentRestaurant, loadingRestaurants],
   );
