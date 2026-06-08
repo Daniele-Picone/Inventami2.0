@@ -68,18 +68,19 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Report',
     roles: ['MANAGER'],
   },
+   {
+    href: '/users',
+    icon: Users,
+    label: 'Utenti',
+    roles: ['MANAGER'],
+  },
   {
     href: '/settings',
     icon: Settings,
     label: 'Settings',
     roles: ['MANAGER'],
   },
-  {
-    href: '/users',
-    icon: Users,
-    label: 'Utenti',
-    roles: ['MANAGER'],
-  },
+ 
 ];
 
 function normalizeRole(role?: string | null): UserRole {
