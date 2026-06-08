@@ -5,60 +5,125 @@ import { usePathname, useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import AppLogo from '@/components/ui/AppLogo';
 import {
+  BarChart2,
   BookOpen,
+  Building2,
+  Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  FileSpreadsheet,
+  Landmark,
   LogOut,
-  BarChart2,
+  Settings,
   Users,
   Warehouse,
-  ChevronDown,
-  Check,
-  Building2,
-  FileSpreadsheet,
   X,
-  Settings,
-  Landmark,
 } from 'lucide-react';
 import { useRestaurant } from '@/context/RestaurantContext';
 
-const NAV = [
-  ['/dashboard', BarChart2, 'Dashboard'],
-  ['/magazzino', Warehouse, 'Magazzino'],
-  ['/digital-wine-menu', BookOpen, 'Menù Ospiti'],
-  ['/reports', FileSpreadsheet, 'Report'],
-  ['/users', Users, 'Utenti'],
-  ['/settings', Settings, 'Settings'],
-] as const;
+type UserRole = 'MANAGER' | 'SOMMELIER' | 'STAFF';
 
 type LoggedUser = {
   id: string;
   nome: string;
   cognome: string;
   email: string;
-  role: 'MANAGER' | 'SOMMELIER' | 'STAFF';
+  role: string;
   companyId: string;
   companyName?: string;
   inviteKey?: string | null;
+  plan?: string;
 };
+
+type NavItem = {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  roles: UserRole[];
+};
+
+const NAV_ITEMS: NavItem[] = [
+  {
+    href: '/dashboard',
+    icon: BarChart2,
+    label: 'Dashboard',
+    roles: ['MANAGER'],
+  },
+  {
+    href: '/magazzino',
+    icon: Warehouse,
+    label: 'Magazzino',
+    roles: ['MANAGER', 'SOMMELIER'],
+  },
+  {
+    href: '/digital-wine-menu',
+    icon: BookOpen,
+    label: 'Menù Ospiti',
+    roles: ['MANAGER', 'SOMMELIER', 'STAFF'],
+  },
+  {
+    href: '/reports',
+    icon: FileSpreadsheet,
+    label: 'Report',
+    roles: ['MANAGER'],
+  },
+  {
+    href: '/settings',
+    icon: Settings,
+    label: 'Settings',
+    roles: ['MANAGER'],
+  },
+  {
+    href: '/users',
+    icon: Users,
+    label: 'Utenti',
+    roles: ['MANAGER'],
+  },
+];
+
+function normalizeRole(role?: string | null): UserRole {
+  const value = String(role || '').trim().toUpperCase();
+
+  if (value === 'MANAGER') return 'MANAGER';
+  if (value === 'SOMMELIER') return 'SOMMELIER';
+  if (value === 'STAFF') return 'STAFF';
+
+  return 'STAFF';
+}
 
 function getInitials(nome?: string, cognome?: string) {
   const first = nome?.trim()?.[0] ?? '';
   const last = cognome?.trim()?.[0] ?? '';
+
   return `${first}${last}`.toUpperCase() || 'U';
 }
 
-function roleLabel(role?: LoggedUser['role']) {
-  if (role === 'MANAGER') return 'Manager';
-  if (role === 'SOMMELIER') return 'Sommelier';
-  if (role === 'STAFF') return 'Staff';
-  return 'Utente';
+function roleLabel(role?: string | null) {
+  const normalizedRole = normalizeRole(role);
+
+  if (normalizedRole === 'MANAGER') return 'Manager';
+  if (normalizedRole === 'SOMMELIER') return 'Sommelier';
+
+  return 'Staff';
+}
+
+function readUserFromStorage(): LoggedUser | null {
+  if (typeof window === 'undefined') return null;
+  const saved = localStorage.getItem('winecellar_user');
+  if (!saved) return null;
+  try {
+    const parsed = JSON.parse(saved) as LoggedUser;
+    return { ...parsed, role: normalizeRole(parsed.role) };
+  } catch {
+    return null;
+  }
 }
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const [show, setShow] = useState(false);
-  const [user, setUser] = useState<LoggedUser | null>(null);
+  const [showRestaurantMenu, setShowRestaurantMenu] = useState(false);
+  const [user, setUser] = useState<LoggedUser | null>(readUserFromStorage);
 
   const [showRestaurantForm, setShowRestaurantForm] = useState(false);
   const [restaurantName, setRestaurantName] = useState('');
@@ -77,6 +142,11 @@ export default function Sidebar() {
     createRestaurant,
   } = useRestaurant();
 
+  const userRole = normalizeRole(user?.role);
+
+  const canEditRestaurants =
+    userRole === 'MANAGER' || userRole === 'SOMMELIER';
+
   useEffect(() => {
     const savedUser = localStorage.getItem('winecellar_user');
 
@@ -86,9 +156,21 @@ export default function Sidebar() {
     }
 
     try {
-      setUser(JSON.parse(savedUser));
+      const parsedUser = JSON.parse(savedUser) as LoggedUser;
+
+      const normalizedUser: LoggedUser = {
+        ...parsedUser,
+        role: normalizeRole(parsedUser.role),
+      };
+
+      console.log('SIDEBAR USER ROLE:', normalizedUser.role);
+      console.log('SIDEBAR USER:', normalizedUser);
+
+      setUser(normalizedUser);
+      localStorage.setItem('winecellar_user', JSON.stringify(normalizedUser));
     } catch {
       localStorage.removeItem('winecellar_user');
+      localStorage.removeItem('winecellar_current_restaurant');
       router.push('/sign-up-login-screen');
     }
   }, [router]);
@@ -99,16 +181,16 @@ export default function Sidebar() {
     return restaurants.filter((restaurant) => {
       if (!companyName) return true;
 
-      const restaurantName = restaurant.nome.trim().toLowerCase();
-
-      return restaurantName !== companyName;
+      return restaurant.nome.trim().toLowerCase() !== companyName;
     });
   }, [restaurants, user?.companyName]);
 
   const selectedRestaurant = useMemo(() => {
     if (
       currentRestaurant &&
-      visibleRestaurants.some((restaurant) => restaurant.id === currentRestaurant.id)
+      visibleRestaurants.some(
+        (restaurant) => restaurant.id === currentRestaurant.id,
+      )
     ) {
       return currentRestaurant;
     }
@@ -117,13 +199,15 @@ export default function Sidebar() {
   }, [currentRestaurant, visibleRestaurants]);
 
   useEffect(() => {
-    if (
-      selectedRestaurant &&
-      currentRestaurant?.id !== selectedRestaurant.id
-    ) {
-      setCurrentRestaurant(selectedRestaurant);
-    }
+    if (!selectedRestaurant) return;
+    if (currentRestaurant?.id === selectedRestaurant.id) return;
+
+    setCurrentRestaurant(selectedRestaurant);
   }, [selectedRestaurant, currentRestaurant?.id, setCurrentRestaurant]);
+
+  const allowedNavItems = useMemo(() => {
+    return NAV_ITEMS.filter((item) => item.roles.includes(userRole));
+  }, [userRole]);
 
   const handleLogout = () => {
     localStorage.removeItem('winecellar_user');
@@ -133,6 +217,11 @@ export default function Sidebar() {
 
   const handleCreateRestaurant = async (event: FormEvent) => {
     event.preventDefault();
+
+    if (!canEditRestaurants) {
+      setRestaurantError('Non hai i permessi per creare ristoranti');
+      return;
+    }
 
     if (!restaurantName.trim()) {
       setRestaurantError('Inserisci il nome del locale');
@@ -155,7 +244,7 @@ export default function Sidebar() {
       setRestaurantCity('');
       setRestaurantAddress('');
       setShowRestaurantForm(false);
-      setShow(false);
+      setShowRestaurantMenu(false);
     } catch (error) {
       setRestaurantError(
         error instanceof Error
@@ -215,7 +304,8 @@ export default function Sidebar() {
         {!collapsed && (
           <div className="px-3 py-3 border-b border-border relative">
             <button
-              onClick={() => setShow((value) => !value)}
+              type="button"
+              onClick={() => setShowRestaurantMenu((value) => !value)}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-secondary hover:bg-muted transition-colors text-left"
             >
               {selectedRestaurant ? (
@@ -247,7 +337,7 @@ export default function Sidebar() {
                       Nessun locale
                     </div>
                     <div className="text-xs text-muted-foreground truncate">
-                      Aggiungi un ristorante
+                      Nessun ristorante selezionato
                     </div>
                   </div>
                 </>
@@ -256,7 +346,7 @@ export default function Sidebar() {
               <ChevronDown size={14} />
             </button>
 
-            {show && (
+            {showRestaurantMenu && (
               <div className="absolute left-3 right-3 top-full mt-1 bg-card border border-border rounded-xl shadow-lg z-50 overflow-hidden">
                 <div className="px-3 py-2 border-b border-border">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -272,10 +362,11 @@ export default function Sidebar() {
 
                 {visibleRestaurants.map((restaurant) => (
                   <button
+                    type="button"
                     key={restaurant.id}
                     onClick={() => {
                       setCurrentRestaurant(restaurant);
-                      setShow(false);
+                      setShowRestaurantMenu(false);
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-secondary transition-colors text-left"
                   >
@@ -302,18 +393,21 @@ export default function Sidebar() {
                   </button>
                 ))}
 
-                <div className="px-3 py-2 border-t border-border">
-                  <button
-                    onClick={() => {
-                      setShowRestaurantForm(true);
-                      setShow(false);
-                    }}
-                    className="w-full flex items-center gap-2 text-xs text-primary font-semibold py-1"
-                  >
-                    <Building2 size={13} />
-                    Aggiungi ristorante
-                  </button>
-                </div>
+                {canEditRestaurants && (
+                  <div className="px-3 py-2 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowRestaurantForm(true);
+                        setShowRestaurantMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 text-xs text-primary font-semibold py-1"
+                    >
+                      <Building2 size={13} />
+                      Aggiungi ristorante
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -328,14 +422,16 @@ export default function Sidebar() {
         )}
 
         <nav className="flex-1 py-4 px-2 flex flex-col gap-1">
-          {NAV.map(([href, Icon, label]) => {
-            const active = pathname === href || pathname?.startsWith(href);
+          {allowedNavItems.map((item) => {
+            const Icon = item.icon;
+            const active = pathname === item.href;
 
             return (
               <Link
-                key={href}
-                href={href}
-                title={collapsed ? label : undefined}
+                key={item.href}
+                href={item.href}
+                prefetch={false}
+                title={collapsed ? item.label : undefined}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group relative ${
                   active
                     ? 'bg-primary/10 text-primary'
@@ -344,11 +440,11 @@ export default function Sidebar() {
               >
                 <Icon size={18} />
 
-                {!collapsed && <span>{label}</span>}
+                {!collapsed && <span>{item.label}</span>}
 
                 {collapsed && (
                   <span className="absolute left-full ml-2 px-2 py-1 bg-foreground text-background text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-                    {label}
+                    {item.label}
                   </span>
                 )}
               </Link>
@@ -381,6 +477,7 @@ export default function Sidebar() {
           </div>
 
           <button
+            type="button"
             onClick={handleLogout}
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary"
           >
@@ -390,6 +487,7 @@ export default function Sidebar() {
         </div>
 
         <button
+          type="button"
           onClick={() => setCollapsed((value) => !value)}
           className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-card border border-border rounded-full flex items-center justify-center shadow-sm hover:bg-secondary"
         >
@@ -397,7 +495,7 @@ export default function Sidebar() {
         </button>
       </aside>
 
-      {showRestaurantForm && (
+      {showRestaurantForm && canEditRestaurants && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-foreground/30 backdrop-blur-sm">
           <form
             onSubmit={handleCreateRestaurant}

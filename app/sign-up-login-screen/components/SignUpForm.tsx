@@ -2,15 +2,17 @@
 
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Loader2, Copy, Check } from 'lucide-react';
+import { Loader2, Copy, Check, Building2, KeyRound } from 'lucide-react';
 
 type RegisterRole = 'MANAGER' | 'STAFF' | 'SOMMELIER';
+type RegisterMode = 'CREATE_COMPANY' | 'JOIN_COMPANY';
 
 interface SignUpFormData {
   nome: string;
   cognome: string;
   email: string;
   struttura: string;
+  restaurantName: string;
   role: RegisterRole;
   companyKey: string;
   password: string;
@@ -20,6 +22,9 @@ interface SignUpFormData {
 
 export default function SignUpForm() {
   const [step, setStep] = useState<'form' | 'verify' | 'done'>('form');
+  const [registerMode, setRegisterMode] =
+    useState<RegisterMode>('CREATE_COMPANY');
+
   const [serverError, setServerError] = useState('');
   const [emailToVerify, setEmailToVerify] = useState('');
   const [code, setCode] = useState('');
@@ -35,16 +40,34 @@ export default function SignUpForm() {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<SignUpFormData>({
     defaultValues: {
       role: 'MANAGER',
       terms: false,
+      restaurantName: '',
+      companyKey: '',
     },
   });
 
   const role = watch('role');
   const password = watch('password');
+
+  function switchToCreateCompany() {
+    setRegisterMode('CREATE_COMPANY');
+    setValue('role', 'MANAGER');
+    setValue('companyKey', '');
+    setServerError('');
+  }
+
+  function switchToJoinCompany() {
+    setRegisterMode('JOIN_COMPANY');
+    setValue('role', 'STAFF');
+    setValue('struttura', '');
+    setValue('restaurantName', '');
+    setServerError('');
+  }
 
   async function onSubmit(data: SignUpFormData) {
     setServerError('');
@@ -54,20 +77,83 @@ export default function SignUpForm() {
       return;
     }
 
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok) {
-      setServerError(json.error || 'Errore durante la registrazione');
+    if (registerMode === 'CREATE_COMPANY' && !data.struttura.trim()) {
+      setServerError('Inserisci il nome della società');
       return;
     }
 
-    setEmailToVerify(data.email);
+    if (registerMode === 'JOIN_COMPANY' && !data.companyKey.trim()) {
+      setServerError('Inserisci il codice invito');
+      return;
+    }
+
+    const payload = {
+      nome: data.nome.trim(),
+      cognome: data.cognome.trim(),
+      email: data.email.trim().toLowerCase(),
+      password: data.password,
+      role: registerMode === 'CREATE_COMPANY' ? 'MANAGER' : data.role,
+
+      companyName:
+        registerMode === 'CREATE_COMPANY'
+          ? data.struttura.trim()
+          : undefined,
+
+      restaurantName:
+        registerMode === 'CREATE_COMPANY'
+          ? data.restaurantName.trim()
+          : undefined,
+
+      inviteKey:
+        registerMode === 'JOIN_COMPANY'
+          ? data.companyKey.trim().toUpperCase()
+          : undefined,
+
+      // compatibilità con vecchia API, se ancora usa questi nomi
+      struttura:
+        registerMode === 'CREATE_COMPANY'
+          ? data.struttura.trim()
+          : undefined,
+
+      companyKey:
+        registerMode === 'JOIN_COMPANY'
+          ? data.companyKey.trim().toUpperCase()
+          : undefined,
+    };
+
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await res.text();
+
+    let json: {
+      error?: string;
+      details?: string;
+    } = {};
+
+    if (text) {
+      try {
+        json = JSON.parse(text);
+      } catch {
+        console.error('RISPOSTA NON JSON DA /api/auth/register:', text);
+        setServerError(
+          'La API /api/auth/register non sta restituendo JSON valido.',
+        );
+        return;
+      }
+    }
+
+    if (!res.ok) {
+      setServerError(
+        json.details || json.error || 'Errore durante la registrazione',
+      );
+      return;
+    }
+
+    setEmailToVerify(data.email.trim().toLowerCase());
     setStep('verify');
   }
 
@@ -81,7 +167,28 @@ export default function SignUpForm() {
       body: JSON.stringify({ email: emailToVerify, code }),
     });
 
-    const json = await res.json();
+    const text = await res.text();
+
+    let json: {
+      error?: string;
+      user?: {
+        companyName?: string;
+        inviteKey?: string | null;
+        role?: string;
+      };
+    } = {};
+
+    if (text) {
+      try {
+        json = JSON.parse(text);
+      } catch {
+        setLoadingVerify(false);
+        setServerError(
+          'La API /api/auth/verify-code non sta restituendo JSON valido.',
+        );
+        return;
+      }
+    }
 
     setLoadingVerify(false);
 
@@ -90,7 +197,7 @@ export default function SignUpForm() {
       return;
     }
 
-    setResult(json.user);
+    setResult(json.user || null);
     setStep('done');
   }
 
@@ -108,7 +215,9 @@ export default function SignUpForm() {
         <p className="text-sm text-muted-foreground mt-1">
           Abbiamo inviato un codice a:
         </p>
-        <p className="text-sm font-semibold text-foreground mt-1">{emailToVerify}</p>
+        <p className="text-sm font-semibold text-foreground mt-1">
+          {emailToVerify}
+        </p>
 
         {serverError && (
           <div className="mt-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
@@ -159,19 +268,21 @@ export default function SignUpForm() {
   if (step === 'done') {
     return (
       <div className="fade-in">
-        <h2 className="text-2xl font-bold text-foreground">Iscrizione inviata</h2>
+        <h2 className="text-2xl font-bold text-foreground">
+          Iscrizione completata
+        </h2>
         <p className="text-sm text-muted-foreground mt-2">
           La tua email è stata verificata correttamente.
         </p>
 
         <div className="mt-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
-          Registrazione completata per {result?.companyName}.
+          Registrazione completata per {result?.companyName || 'WineCellar'}.
         </div>
 
         {result?.role === 'MANAGER' && result?.inviteKey && (
           <div className="mt-6 border border-border rounded-xl p-4 bg-card">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Codice azienda per collaboratori
+              Codice invito società
             </p>
 
             <div className="mt-2 flex items-center justify-between gap-3 bg-muted px-3 py-2 rounded-lg">
@@ -189,8 +300,8 @@ export default function SignUpForm() {
             </div>
 
             <p className="text-xs text-muted-foreground mt-3">
-              Dai questo codice ai collaboratori. Lo inseriranno in fase di registrazione
-              per collegarsi alla tua azienda.
+              Dai questo codice a staff e sommelier. Lo useranno in fase di
+              registrazione per entrare nella tua società.
             </p>
           </div>
         )}
@@ -210,7 +321,7 @@ export default function SignUpForm() {
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-foreground">Crea account</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Registra la tua struttura su WineCellar
+          Crea una società o entra con un codice invito
         </p>
       </div>
 
@@ -221,6 +332,34 @@ export default function SignUpForm() {
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={switchToCreateCompany}
+            className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold transition-all ${
+              registerMode === 'CREATE_COMPANY'
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground'
+            }`}
+          >
+            <Building2 size={15} />
+            Crea società
+          </button>
+
+          <button
+            type="button"
+            onClick={switchToJoinCompany}
+            className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold transition-all ${
+              registerMode === 'JOIN_COMPANY'
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground'
+            }`}
+          >
+            <KeyRound size={15} />
+            Codice invito
+          </button>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <Input
             label="Nome"
@@ -247,36 +386,60 @@ export default function SignUpForm() {
           })}
         />
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-semibold text-foreground">Tipo account</label>
-          <select
-            className="w-full px-3.5 py-2.5 rounded-lg border text-sm bg-card text-foreground outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary border-border"
-            {...register('role')}
-          >
-            <option value="MANAGER">Manager / Proprietario</option>
-            <option value="SOMMELIER">Sommelier</option>
-            <option value="STAFF">Staff</option>
-          </select>
-        </div>
+        {registerMode === 'CREATE_COMPANY' ? (
+          <>
+            <Input
+              label="Nome società"
+              placeholder="Es. Gruppo La Vigna"
+              error={errors.struttura?.message}
+              {...register('struttura', {
+                required:
+                  registerMode === 'CREATE_COMPANY'
+                    ? 'Nome società obbligatorio'
+                    : false,
+              })}
+            />
 
-        {role === 'MANAGER' ? (
-          <Input
-            label="Nome azienda / struttura"
-            placeholder="Ristorante La Vigna"
-            error={errors.struttura?.message}
-            {...register('struttura', {
-              required: role === 'MANAGER' ? 'Nome struttura obbligatorio' : false,
-            })}
-          />
+            <Input
+              label="Primo ristorante"
+              placeholder="Es. Ristorante La Vigna"
+              error={errors.restaurantName?.message}
+              {...register('restaurantName')}
+            />
+
+            <input type="hidden" value="MANAGER" {...register('role')} />
+          </>
         ) : (
-          <Input
-            label="Codice azienda"
-            placeholder="WC-A1B2C3D4"
-            error={errors.companyKey?.message}
-          {...register('companyKey', {
-  required: 'Codice azienda obbligatorio',
-})}
-          />
+          <>
+            <Input
+              label="Codice invito società"
+              placeholder="Es. A1B2C3D4"
+              error={errors.companyKey?.message}
+              className="uppercase tracking-widest"
+              {...register('companyKey', {
+                required: 'Codice invito obbligatorio',
+                onChange: (event) => {
+                  event.target.value = event.target.value.toUpperCase();
+                },
+              })}
+            />
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-semibold text-foreground">
+                Ruolo
+              </label>
+              <select
+                className="w-full px-3.5 py-2.5 rounded-lg border text-sm bg-card text-foreground outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary border-border"
+                {...register('role')}
+              >
+                <option value="STAFF">Staff</option>
+                <option value="SOMMELIER">Sommelier</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Il codice deve essere fornito dal manager della società.
+              </p>
+            </div>
+          </>
         )}
 
         <Input
@@ -311,8 +474,11 @@ export default function SignUpForm() {
             Accetto i Termini di Servizio e la Privacy Policy
           </span>
         </label>
+
         {errors.terms && (
-          <p className="text-xs text-red-600 -mt-2">{errors.terms.message}</p>
+          <p className="text-xs text-red-600 -mt-2">
+            {errors.terms.message}
+          </p>
         )}
 
         <button
@@ -325,8 +491,10 @@ export default function SignUpForm() {
               <Loader2 size={16} className="animate-spin" />
               Invio codice…
             </>
+          ) : registerMode === 'CREATE_COMPANY' ? (
+            'Crea società'
           ) : (
-            'Crea account'
+            'Entra con codice invito'
           )}
         </button>
       </form>

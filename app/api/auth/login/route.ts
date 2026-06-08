@@ -3,7 +3,10 @@ import bcrypt from 'bcryptjs';
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
+    const body = await req.json();
+
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = String(body.password || '');
 
     if (!email || !password) {
       return Response.json(
@@ -15,7 +18,14 @@ export async function POST(req: Request) {
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
-        company: true,
+        company: {
+          select: {
+            id: true,
+            name: true,
+            inviteKey: true,
+            plan: true,
+          },
+        },
       },
     });
 
@@ -37,10 +47,17 @@ export async function POST(req: Request) {
 
     if (!user.verified) {
       return Response.json(
-        { error: 'Email non verificata. Completa prima la verifica con codice.' },
+        {
+          error:
+            'Email non verificata. Completa prima la verifica con il codice.',
+        },
         { status: 403 },
       );
     }
+
+    const role = String(user.role || '').trim().toUpperCase();
+
+    console.log('LOGIN USER ROLE:', role);
 
     return Response.json({
       success: true,
@@ -49,16 +66,21 @@ export async function POST(req: Request) {
         nome: user.nome,
         cognome: user.cognome,
         email: user.email,
-        role: user.role,
+        role,
         companyId: user.companyId,
-        companyName: user.company?.name,
-        inviteKey: user.role === 'MANAGER' ? user.company?.inviteKey : null,
+        companyName: user.company?.name || '',
+        inviteKey: role === 'MANAGER' ? user.company?.inviteKey : null,
+        plan: user.company?.plan || 'FREE',
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error('POST /api/auth/login error:', error);
+
     return Response.json(
-      { error: 'Errore durante il login' },
+      {
+        error: 'Errore durante il login',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 },
     );
   }
