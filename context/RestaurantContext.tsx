@@ -95,14 +95,31 @@ export function RestaurantProvider({
     useState<Restaurant | null>(null);
   const [loadingRestaurants, setLoadingRestaurants] = useState(true);
 
+  // Legge il companyId direttamente dall'utente loggato al momento del render
+  const [companyId, setCompanyId] = useState<string | null>(() => {
+    const user = getLoggedUser();
+    return user?.companyId ?? null;
+  });
+
+  const [companyName, setCompanyName] = useState<string | null>(() => {
+    const user = getLoggedUser();
+    return user?.companyName ?? null;
+  });
+
   const setCurrentRestaurant = (restaurant: Restaurant) => {
     setCurrentRestaurantState(restaurant);
-    localStorage.setItem('winecellar_current_restaurant', restaurant.id);
+    if (companyId) {
+      localStorage.setItem(
+        `winecellar_current_restaurant_${companyId}`,
+        restaurant.id,
+      );
+    }
   };
 
   const createRestaurant = async (
     input: CreateRestaurantInput,
   ): Promise<Restaurant> => {
+    // Rilegge sempre l'utente fresco dal localStorage
     const loggedUser = getLoggedUser();
 
     if (!loggedUser?.companyId) {
@@ -139,6 +156,7 @@ export function RestaurantProvider({
   };
 
   const reloadRestaurants = async () => {
+    // Rilegge sempre l'utente fresco dal localStorage
     const loggedUser = getLoggedUser();
 
     if (!loggedUser?.companyId) {
@@ -147,6 +165,10 @@ export function RestaurantProvider({
       setLoadingRestaurants(false);
       return;
     }
+
+    // Aggiorna il companyId locale se è cambiato (es. dopo login di un nuovo utente)
+    setCompanyId(loggedUser.companyId);
+    setCompanyName(loggedUser.companyName ?? null);
 
     try {
       setLoadingRestaurants(true);
@@ -175,8 +197,9 @@ export function RestaurantProvider({
 
       setRestaurants(mapped);
 
+      // Chiave salvata per companyId specifico, evita conflitti tra utenti diversi
       const savedRestaurantId = localStorage.getItem(
-        'winecellar_current_restaurant',
+        `winecellar_current_restaurant_${loggedUser.companyId}`,
       );
 
       const selectedRestaurant =
@@ -188,7 +211,7 @@ export function RestaurantProvider({
 
       if (selectedRestaurant) {
         localStorage.setItem(
-          'winecellar_current_restaurant',
+          `winecellar_current_restaurant_${loggedUser.companyId}`,
           selectedRestaurant.id,
         );
       }
@@ -201,10 +224,28 @@ export function RestaurantProvider({
     }
   };
 
+  // Ricarica i ristoranti ogni volta che cambia il companyId
   useEffect(() => {
     reloadRestaurants();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [companyId]);
+
+  // Ascolta i cambiamenti nel localStorage (es. nuovo login in un'altra tab)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'winecellar_user') {
+        const newUser = getLoggedUser();
+        const newCompanyId = newUser?.companyId ?? null;
+        if (newCompanyId !== companyId) {
+          setCompanyId(newCompanyId);
+          setCompanyName(newUser?.companyName ?? null);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [companyId]);
 
   const value = useMemo(
     () => ({
@@ -215,6 +256,7 @@ export function RestaurantProvider({
       reloadRestaurants,
       createRestaurant,
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [restaurants, currentRestaurant, loadingRestaurants],
   );
 
